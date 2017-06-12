@@ -46,8 +46,8 @@ void log_message(char *message) {
 }
 
 void shutdown(int sig_no) {
-    printf("Shuttingthe server down\n");
-    log_message((char *) "Shutting down server");
+    printf("Shutting down\n");
+    log_message((char *) "->SHUTTING the server down");
     if (close(server_socket) < 0) {
         perror("Server close");
     }
@@ -132,7 +132,6 @@ void serve_file(int client_socket, char *path, void headers(int)) {
     FILE *file = fopen(path, "r");
     if (file == NULL) {
         // NOT FOUND
-        printf("Not found\n");
         char not_found_path[256];
         sprintf(not_found_path, "%s/not_found.html", STATIC_FILE_PATH);
         file = fopen(not_found_path, "r");
@@ -195,7 +194,7 @@ void *handle_request(void *clt) {
     }
 
     char log_msg[1024];
-    sprintf(log_msg, "Received request %s with query string '%s'", method, query_string);
+    sprintf(log_msg, "RECEIVED request %s with query string '%s' from client %d", method, query_string, client_socket);
     log_message(log_msg);
 
     char method_env_var[256];
@@ -210,7 +209,7 @@ void *handle_request(void *clt) {
 
     // UNIMPLEMENTED
     if (strcasecmp(method, "get") != 0 && strcasecmp(method, "post") != 0) {
-        sprintf(log_msg, "Responding with %s unimplemented", method);
+        sprintf(log_msg, "RESPONDING with %s unimplemented for client %d", method, client_socket);
         log_message(log_msg);
         printf("Unimplemented\n");
         unimplemented(client_socket);
@@ -231,7 +230,7 @@ void *handle_request(void *clt) {
 
 //  GET
     if (strcasecmp(method, "get") == 0) {
-        sprintf(log_msg, "Sending response for %s %s", method, url);
+        sprintf(log_msg, "SENDING response for %s %s for client %d", method, url, client_socket);
         log_message(log_msg);
         char path[256];
         if (strcmp(url, "/") == 0) {
@@ -244,7 +243,7 @@ void *handle_request(void *clt) {
     }
 //    POST
     else {
-        sprintf(log_msg, "Executing cgi for client %d", client_socket);
+        sprintf(log_msg, "EXECUTING cgi for client %d", client_socket);
         log_message(log_msg);
         char path[512];
         sprintf(path, "/Users/jkret/Studia/Projekty/HTTP/http-server%s", url);
@@ -267,7 +266,7 @@ void *handle_request(void *clt) {
         } else {
             int status;
             waitpid(cgi, &status, 0);
-            sprintf(log_msg, "cgi script for client %d executed", client_socket);
+            sprintf(log_msg, "EXECUTED cgi script for client %d", client_socket);
             log_message(log_msg);
         }
     }
@@ -291,7 +290,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
     char log_msg[1024];
-    sprintf(log_msg, "Server started. Listening on port %s", port);
+    sprintf(log_msg, "->STARTED server. Listening on port %s", port);
     log_message(log_msg);
 
     printf("Listening on port %s\n", port);
@@ -307,7 +306,7 @@ int main() {
         if (pthread_create(&thread, NULL, handle_request, (void *) new_client) != 0) {
             perror("Create thread");
         }
-        sprintf(log_msg, "Accepted new connection on socket %d", client_socket);
+        sprintf(log_msg, "ACCEPTED new connection on socket %d", client_socket);
         log_message(log_msg);
     }
 }
