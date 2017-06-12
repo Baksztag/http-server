@@ -6,24 +6,53 @@
 #define STATIC_FILE_PATH "../public"
 
 //TODO Add config file support
-//TODO Log server activity to *.log files
-//TODO Implement POST
 //TODO Add error handling
 
 //W prezentacji zaprezentowac dzialajaca obsluge bledow
 //oraz w POST obsluzyc skrypt CGI
 
 int server_socket = -1;
+FILE *log = NULL;
 
 typedef struct _client {
     int client_socket;
 } client;
 
+char **get_config() {
+    FILE *config_file = fopen("../config", "r");
+    if (config_file == NULL) {
+        perror("Config");
+        exit(EXIT_FAILURE);
+    }
+    char *attribute;
+    size_t len = 0;
+    char **result = new char*[2];
+    int j = 0;
+    while (getline(&attribute, &len, config_file) != -1) {
+        int i = 0;
+        while (attribute[i] != '=') {
+            ++i;
+        }
+        result[j] = attribute + i + 1;
+        ++j;
+    }
+    return result;
+}
+
+void log_message(char *message) {
+    time_t now;
+    time(&now);
+    fprintf(log, "%s. Time: %s", message, ctime(&now));
+}
 
 void shutdown(int sig_no) {
-    printf("Shutting down\n");
+    printf("Shuttingthe server down\n");
+    log_message((char *) "Shutting down server");
     if (close(server_socket) < 0) {
         perror("Server close");
+    }
+    if (fclose(log)) {
+        perror("close log file");
     }
     exit(0);
 }
@@ -148,7 +177,6 @@ void *handle_request(void *clt) {
         ++j;
     }
     method[i] = '\0';
-    printf("Method: %s\n", method);
 
     ++i;
     char *headers = request + i;
@@ -165,7 +193,11 @@ void *handle_request(void *clt) {
         }
         ++i;
     }
-    printf("Query string: %s, %d\n", query_string, (int) strlen(query_string));
+
+    char log_msg[1024];
+    sprintf(log_msg, "Received request %s with query string '%s'", method, query_string);
+    log_message(log_msg);
+
     char method_env_var[256];
     char query_env_var[256];
     char content_len_env_var[256];
@@ -178,6 +210,8 @@ void *handle_request(void *clt) {
 
     // UNIMPLEMENTED
     if (strcasecmp(method, "get") != 0 && strcasecmp(method, "post") != 0) {
+        sprintf(log_msg, "Responding with %s unimplemented", method);
+        log_message(log_msg);
         printf("Unimplemented\n");
         unimplemented(client_socket);
         return NULL;
@@ -197,6 +231,8 @@ void *handle_request(void *clt) {
 
 //  GET
     if (strcasecmp(method, "get") == 0) {
+        sprintf(log_msg, "Sending response for %s %s", method, url);
+        log_message(log_msg);
         char path[256];
         if (strcmp(url, "/") == 0) {
             sprintf(path, "%s/index.html", STATIC_FILE_PATH);
@@ -208,7 +244,8 @@ void *handle_request(void *clt) {
     }
 //    POST
     else {
-        printf("Executing cgi...\n");
+        sprintf(log_msg, "Executing cgi for client %d", client_socket);
+        log_message(log_msg);
         char path[512];
         sprintf(path, "/Users/jkret/Studia/Projekty/HTTP/http-server%s", url);
         pid_t cgi = fork();
@@ -225,12 +262,13 @@ void *handle_request(void *clt) {
             while (fgets(line, 256, cgi_stream) != NULL) {
                 send(client_socket, line, strlen(line), 0);
             }
+            pclose(cgi_stream);
             return NULL;
         } else {
             int status;
-            printf("Waiting for child process\n");
             waitpid(cgi, &status, 0);
-            printf("cgi script executed\n");
+            sprintf(log_msg, "cgi script for client %d executed", client_socket);
+            log_message(log_msg);
         }
     }
     shutdown(client_socket, SHUT_RDWR);
@@ -240,11 +278,21 @@ void *handle_request(void *clt) {
 
 int main() {
     signal(SIGINT, shutdown);
-    char *port = (char *) "8001";
+    char *port = (char *) "8000";
     if ((server_socket = set_up_server_socket(port)) < 0) {
         printf("An error occurred while trying to set up server socket\n");
         exit(EXIT_FAILURE);
     }
+    log = fopen("server.log", "a");
+    if (log == NULL) {
+        printf("An error occurred while trying to create/open the log file\n");
+        shutdown(server_socket, SHUT_RDWR);
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+    char log_msg[1024];
+    sprintf(log_msg, "Server started. Listening on port %s", port);
+    log_message(log_msg);
 
     printf("Listening on port %s\n", port);
     while (1) {
@@ -259,5 +307,7 @@ int main() {
         if (pthread_create(&thread, NULL, handle_request, (void *) new_client) != 0) {
             perror("Create thread");
         }
+        sprintf(log_msg, "Accepted new connection on socket %d", client_socket);
+        log_message(log_msg);
     }
 }
