@@ -5,13 +5,7 @@
 #include <cstring>
 #include <wait.h>
 
-#define STATIC_FILE_PATH "../public"
-
-//TODO Add config file support
-//TODO Add error handling
-
-//W prezentacji zaprezentowac dzialajaca obsluge bledow
-//oraz w POST obsluzyc skrypt CGI
+char *static_file_path = NULL;
 
 int server_socket = -1;
 FILE *log = NULL;
@@ -26,18 +20,23 @@ char **get_config() {
         perror("Config");
         exit(EXIT_FAILURE);
     }
-    char *attribute;
-    size_t len = 0;
-    char **result = new char*[2];
-    int j = 0;
-    while (getline(&attribute, &len, config_file) != -1) {
-        int i = 0;
-        while (attribute[i] != '=') {
-            ++i;
-        }
-        result[j] = attribute + i + 1;
-        ++j;
+    fseek(config_file, 0, SEEK_END);
+    long size = ftell(config_file);
+    rewind(config_file);
+
+    char *buffer = (char*) malloc(sizeof(char) * (size + 1) );
+    fread(buffer, sizeof(char), (size_t) size, config_file);
+    buffer[size] = '\0';
+
+    fclose(config_file);
+    char **result = (char **) malloc(sizeof(char*) * 2);
+    result[0] = buffer;
+    int i = 0;
+    while (buffer[i] != '\n') {
+        ++i;
     }
+    buffer[i] = '\0';
+    result[1] = buffer + i + 1;
     return result;
 }
 
@@ -135,7 +134,7 @@ void serve_file(int client_socket, char *path, void headers(int)) {
     if (file == NULL) {
         // NOT FOUND
         char not_found_path[256];
-        sprintf(not_found_path, "%s/not_found.html", STATIC_FILE_PATH);
+        sprintf(not_found_path, "%s/not_found.html", static_file_path);
         file = fopen(not_found_path, "r");
         headers_404_not_found(client_socket);
         fseek(file, 0, SEEK_END);
@@ -158,7 +157,7 @@ void serve_file(int client_socket, char *path, void headers(int)) {
 
 void unimplemented(int client) {
     char path[256];
-    sprintf(path, "%s/method_not_implemented.html", STATIC_FILE_PATH);
+    sprintf(path, "%s/method_not_implemented.html", static_file_path);
     serve_file(client, path, headers_501_method_not_implemented);
 }
 
@@ -236,10 +235,10 @@ void *handle_request(void *clt) {
         log_message(log_msg);
         char path[256];
         if (strcmp(url, "/") == 0) {
-            sprintf(path, "%s/index.html", STATIC_FILE_PATH);
+            sprintf(path, "%s/index.html", static_file_path);
             serve_file(client_socket, path, headers_200_OK);
         } else {
-            sprintf(path, "%s%s.html", STATIC_FILE_PATH, url);
+            sprintf(path, "%s%s.html", static_file_path, url);
             serve_file(client_socket, path, headers_200_OK);
         }
     }
@@ -280,8 +279,10 @@ void *handle_request(void *clt) {
 }
 
 int main() {
+    char **config = get_config();
     signal(SIGINT, shutdown);
-    char *port = (char *) "8001";
+    char *port = config[0];
+    static_file_path = config[1];
     if ((server_socket = set_up_server_socket(port)) < 0) {
         printf("An error occurred while trying to set up server socket\n");
         exit(EXIT_FAILURE);
