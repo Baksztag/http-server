@@ -246,7 +246,9 @@ void *handle_request(void *clt) {
         sprintf(log_msg, "EXECUTING cgi for client %d", client_socket);
         log_message(log_msg);
         char path[512];
-        sprintf(path, "/Users/jkret/Studia/Projekty/HTTP/http-server%s", url);
+        char *PWD = getenv("PWD");
+//        sprintf(path, "/Users/jkret/Studia/Projekty/HTTP/http-server%s", url);
+        sprintf(path, "%s/..%s", PWD, url);
         pid_t cgi = fork();
         if (cgi == 0) {
             printf("%s\n", url);
@@ -277,7 +279,7 @@ void *handle_request(void *clt) {
 
 int main() {
     signal(SIGINT, shutdown);
-    char *port = (char *) "8000";
+    char *port = (char *) "8001";
     if ((server_socket = set_up_server_socket(port)) < 0) {
         printf("An error occurred while trying to set up server socket\n");
         exit(EXIT_FAILURE);
